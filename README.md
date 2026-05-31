@@ -25,6 +25,13 @@ you're approaching a limit.
   (`claude auth status`) and retries once — the plugin never performs OAuth itself.
 - On a failed fetch it shows the last cached value (marked stale) rather than blanking.
 
+> **Note — this relies on Claude Code internals.** Both the Keychain credential
+> (`Claude Code-credentials` and its JSON shape) and the usage endpoint are private to
+> Claude Code, not a supported public API. The upside is the plugin rides the same rails
+> as `/usage`, so it stays in sync and never exposes your token — but a future Claude
+> Code update could change either the credential format or the endpoint. If usage
+> suddenly stops appearing, that's the first thing to suspect.
+
 ### Why a 5-minute refresh (and not 1 minute)?
 
 The `.5m.py` filename tells SwiftBar to run the plugin every **5 minutes**, not every
