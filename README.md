@@ -11,55 +11,8 @@ subscription rate-limit utilization, not a local token estimate. The plugin read
 the OAuth access token that Claude Code stores in your macOS Keychain and calls the
 same `https://api.anthropic.com/api/oauth/usage` endpoint that `/usage` uses.
 
-
 The bar turns **orange at ≥70%** and **red at ≥90%** so you can see at a glance when
 you're approaching a limit.
-
-## How it works
-
-- Reads the `Claude Code-credentials` entry from the macOS Keychain via `/usr/bin/security`.
-- Calls the OAuth usage endpoint with that token — **no usage is consumed** by polling.
-- Caches results to `~/Library/Caches/swiftbar-claude-usage.json` for a short TTL so
-  extra SwiftBar re-runs serve the cache instead of hammering the API.
-- If the token looks expired, it asks Claude Code's own machinery to refresh
-  (`claude auth status`) and retries once — the plugin never performs OAuth itself.
-- On a failed fetch it shows the last cached value (marked stale) rather than blanking.
-
-> **Note — this relies on Claude Code internals.** Both the Keychain credential
-> (`Claude Code-credentials` and its JSON shape) and the usage endpoint are private to
-> Claude Code, not a supported public API. The upside is the plugin rides the same rails
-> as `/usage`, so it stays in sync and never exposes your token — but a future Claude
-> Code update could change either the credential format or the endpoint. If usage
-> suddenly stops appearing, that's the first thing to suspect.
-
-### Why a 5-minute refresh (and not 1 minute)?
-
-The `.5m.py` filename tells SwiftBar to run the plugin every **5 minutes**, not every
-minute, and that's on purpose:
-
-- **The usage endpoint rate-limits more strictly than once a minute.** Polling every
-  minute would quickly earn an HTTP 429 and leave the bar throttled. A 5-minute cadence
-  stays comfortably under the limit. (If a 429 does happen, the plugin honors the
-  `Retry-After` header — or backs off `CLAUDE_USAGE_BACKOFF` seconds — and serves the
-  cached value meanwhile.)
-- **Usage windows are coarse anyway.** The numbers track a 5-hour rolling window and a
-  7-day window, so sub-minute freshness buys nothing — the value barely moves between
-  one minute and the next.
-
-### Why the cache?
-
-Results are cached to `~/Library/Caches/swiftbar-claude-usage.json` for a TTL of
-`295` seconds (`CLAUDE_USAGE_TTL`) — just **under** the 5-minute interval:
-
-- **SwiftBar re-runs the plugin more often than the filename interval** (e.g. on some
-  UI/menu events, wake-from-sleep, etc.). Without a cache, each of those extra runs
-  would hit the API and risk tripping the rate limit. With it, only the genuinely
-  scheduled run refetches; the extra runs serve the cache.
-- **TTL sits just below 5 minutes** so the normal scheduled run always finds the cache
-  expired and fetches fresh — you still get new numbers every cycle, just not more often
-  than the API is happy to serve them.
-- The **Refresh now** item in the dropdown deletes the cache first, forcing an immediate
-  real fetch when you actually want one.
 
 ## Requirements
 
@@ -108,6 +61,52 @@ click **Refresh now** in the dropdown to apply it immediately):
 ```sh
 cd ~/code/claude-code-usage-bar && git pull
 ```
+
+## How it works
+
+- Reads the `Claude Code-credentials` entry from the macOS Keychain via `/usr/bin/security`.
+- Calls the OAuth usage endpoint with that token — **no usage is consumed** by polling.
+- Caches results to `~/Library/Caches/swiftbar-claude-usage.json` for a short TTL so
+  extra SwiftBar re-runs serve the cache instead of hammering the API.
+- If the token looks expired, it asks Claude Code's own machinery to refresh
+  (`claude auth status`) and retries once — the plugin never performs OAuth itself.
+- On a failed fetch it shows the last cached value (marked stale) rather than blanking.
+
+> **Note — this relies on Claude Code internals.** Both the Keychain credential
+> (`Claude Code-credentials` and its JSON shape) and the usage endpoint are private to
+> Claude Code, not a supported public API. The upside is the plugin rides the same rails
+> as `/usage`, so it stays in sync and never exposes your token — but a future Claude
+> Code update could change either the credential format or the endpoint. If usage
+> suddenly stops appearing, that's the first thing to suspect.
+
+### Why a 5-minute refresh (and not 1 minute)?
+
+The `.5m.py` filename tells SwiftBar to run the plugin every **5 minutes**, not every
+minute, and that's on purpose:
+
+- **The usage endpoint rate-limits more strictly than once a minute.** Polling every
+  minute would quickly earn an HTTP 429 and leave the bar throttled. A 5-minute cadence
+  stays comfortably under the limit. (If a 429 does happen, the plugin honors the
+  `Retry-After` header — or backs off `CLAUDE_USAGE_BACKOFF` seconds — and serves the
+  cached value meanwhile.)
+- **Usage windows are coarse anyway.** The numbers track a 5-hour rolling window and a
+  7-day window, so sub-minute freshness buys nothing — the value barely moves between
+  one minute and the next.
+
+### Why the cache?
+
+Results are cached to `~/Library/Caches/swiftbar-claude-usage.json` for a TTL of
+`295` seconds (`CLAUDE_USAGE_TTL`) — just **under** the 5-minute interval:
+
+- **SwiftBar re-runs the plugin more often than the filename interval** (e.g. on some
+  UI/menu events, wake-from-sleep, etc.). Without a cache, each of those extra runs
+  would hit the API and risk tripping the rate limit. With it, only the genuinely
+  scheduled run refetches; the extra runs serve the cache.
+- **TTL sits just below 5 minutes** so the normal scheduled run always finds the cache
+  expired and fetches fresh — you still get new numbers every cycle, just not more often
+  than the API is happy to serve them.
+- The **Refresh now** item in the dropdown deletes the cache first, forcing an immediate
+  real fetch when you actually want one.
 
 ## Troubleshooting
 
