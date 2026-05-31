@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Plugin cache (lives in ~/Library/Caches at runtime; ignore stray local copies)
+swiftbar-claude-usage.json
