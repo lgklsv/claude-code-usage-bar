@@ -72,68 +72,42 @@ Results are cached to `~/Library/Caches/swiftbar-claude-usage.json` for a TTL of
 
 ## Installation
 
-1. **Install SwiftBar** if you don't have it:
+First, install SwiftBar and open it once so it asks you to pick a **plugin folder**
+(e.g. `~/.swiftbar`):
 
-   ```sh
-   brew install swiftbar
-   ```
+```sh
+brew install swiftbar
+```
 
-   Launch SwiftBar once and choose a **plugin folder** when prompted (e.g.
-   `~/.swiftbar` or `~/Library/Application Support/SwiftBar`).
+Then clone the repo and **symlink** the plugin into that plugin folder. The symlink
+means SwiftBar runs the repo file directly, so the repo stays the single source of
+truth and updating is just `git pull`:
 
-2. **Clone this repo** somewhere you keep checkouts (not a temp dir — it stays the
-   source of truth):
+```sh
+# clone somewhere permanent (not a temp dir)
+git clone https://github.com/lgklsv/claude-code-usage-bar.git ~/code/claude-code-usage-bar
 
-   ```sh
-   git clone https://github.com/lgklsv/claude-code-usage-bar.git ~/code/claude-code-usage-bar
-   ```
+# point SwiftBar at it (adjust ~/.swiftbar if your plugin folder differs)
+ln -s ~/code/claude-code-usage-bar/claude_usage.5m.py ~/.swiftbar/claude_usage.5m.py
+```
 
-3. **Symlink the plugin into your SwiftBar plugin folder** (recommended) and make sure
-   it's executable:
+Finally, in SwiftBar click the icon → **Refresh All**. The usage bar appears in your
+menu bar.
 
-   ```sh
-   chmod +x ~/code/claude-code-usage-bar/claude_usage.5m.py
-   ln -s ~/code/claude-code-usage-bar/claude_usage.5m.py "$HOME/.swiftbar/claude_usage.5m.py"
-   ```
+> **Keep the `.5m.py` name** on the symlink — that suffix is what tells SwiftBar to
+> refresh every 5 minutes.
 
-   SwiftBar follows the symlink, so the file it runs *is* the repo file — one source of
-   truth, and updates are just a `git pull` (see [Updating](#updating)).
-
-   > The `5m` in the filename tells SwiftBar to refresh every 5 minutes. Keep it — and
-   > keep the symlink's name identical, since that's what sets the interval.
-
-   <details>
-   <summary>Prefer a plain copy instead of a symlink?</summary>
-
-   ```sh
-   cp ~/code/claude-code-usage-bar/claude_usage.5m.py "$HOME/.swiftbar/"
-   chmod +x "$HOME/.swiftbar/claude_usage.5m.py"
-   ```
-
-   This works too, but you'll have two copies — you'd re-copy after every update.
-   </details>
-
-4. **Refresh SwiftBar** — click the SwiftBar icon → **Refresh All**, or just wait a
-   few seconds. The Claude usage bar should appear in your menu bar.
-
-That's it. Make sure Claude Code is logged in (`claude` → run `/login` if needed) so
-the plugin can read your credentials.
+Make sure Claude Code is logged in (`claude` → run `/login` if needed) so the plugin
+can read your credentials.
 
 ## Updating
 
-If you installed via the **symlink** above, the repo is the single source of truth —
-just pull and you're done:
+Pull the repo — that's it. SwiftBar runs the updated file on its next refresh (or
+click **Refresh now** in the dropdown to apply it immediately):
 
 ```sh
 cd ~/code/claude-code-usage-bar && git pull
 ```
-
-SwiftBar runs the updated file on its next scheduled refresh (every 5 minutes), or
-immediately if you click **Refresh now** in the dropdown. No re-copying, no
-re-symlinking.
-
-> If a `git pull` ever drops the executable bit, restore it with
-> `chmod +x ~/code/claude-code-usage-bar/claude_usage.5m.py`.
 
 ## Troubleshooting
 
