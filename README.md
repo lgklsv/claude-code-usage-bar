@@ -68,8 +68,11 @@ cd ~/code/claude-code-usage-bar && git pull
 - Calls the OAuth usage endpoint with that token — **no usage is consumed** by polling.
 - Caches results to `~/Library/Caches/swiftbar-claude-usage.json` for a short TTL so
   extra SwiftBar re-runs serve the cache instead of hammering the API.
-- If the token looks expired, it asks Claude Code's own machinery to refresh
-  (`claude auth status`) and retries once — the plugin never performs OAuth itself.
+- If the token looks expired, it briefly boots Claude Code's own interactive session
+  and quits it — Claude Code refreshes the OAuth token during startup (before it talks
+  to the model, so **no usage is consumed**) — then retries the fetch once. The plugin
+  never performs OAuth itself. (It does *not* use `claude auth status`, which only reads
+  the cached token and never triggers a refresh.)
 - On a failed fetch it shows the last cached value (marked stale) rather than blanking.
 
 > **Note — this relies on Claude Code internals.** Both the Keychain credential
@@ -125,9 +128,10 @@ The first time the plugin runs, macOS may pop a **Keychain access prompt** — c
 **Always Allow** so SwiftBar can read the token without prompting again.
 
 **"token expired — open Claude Code to refresh" (and it stays expired).**
-The plugin asks Claude Code to refresh, but it needs the `claude` binary on a path it
-can find. SwiftBar runs with a sparse PATH, so set `CLAUDE_BIN` explicitly in the
-plugin settings, e.g.:
+To refresh, the plugin briefly launches Claude Code's interactive session and quits it
+(that startup is what refreshes the token — `claude auth status` alone does not). For
+that it needs the `claude` binary on a path it can find. SwiftBar runs with a sparse
+PATH, so set `CLAUDE_BIN` explicitly in the plugin settings, e.g.:
 
 ```sh
 CLAUDE_BIN=/opt/homebrew/bin/claude     # Apple Silicon Homebrew

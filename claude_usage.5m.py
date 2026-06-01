@@ -29,7 +29,10 @@
 import base64
 import json
 import os
+import pty
+import select
 import shutil
+import signal
 import struct
 import subprocess
 import time
@@ -70,8 +73,11 @@ MONO = "font=Menlo size=13"
 
 
 # The Claude Code CLI (self-contained native binary). On an auth/expiry error we
-# invoke `claude auth status` — headless, ~0.2s, costs no usage — to let Claude
-# Code's OWN machinery refresh the token. The plugin never does OAuth itself.
+# briefly boot Claude Code's INTERACTIVE session and quit it — Claude Code
+# refreshes the OAuth access token (using its long-lived refresh token) during
+# startup, before it ever talks to the model, so this costs no usage. We do NOT
+# use `claude auth status`: that only READS the cached token and reports on it,
+# it never performs the OAuth refresh. The plugin never does OAuth itself.
 # Resolve the binary, honoring a user-set CLAUDE_BIN first. SwiftBar runs
 # plugins with a sparse GUI PATH (often just /usr/bin:/bin:...), so shutil.which
 # alone misses Homebrew on Apple Silicon (/opt/homebrew/bin) and other dirs not
@@ -224,18 +230,68 @@ def is_auth_error(e):
     return "expired" in msg or "credentials" in msg
 
 
-def nudge_refresh():
-    """Ask Claude Code to validate/refresh auth. Best-effort and side-effect
-    free for us: no OAuth here, no usage cost — we just run its own auth check
-    and let it refresh the token it owns. Failures are ignored on purpose."""
+def nudge_refresh(timeout=20):
+    """Make Claude Code refresh the OAuth token it owns, then quit. We never do
+    OAuth ourselves and never send a model request (no usage cost): interactive
+    Claude Code refreshes its access token during STARTUP, so we just boot it and
+    exit. Interactive mode needs a real TTY, so we run it under a pseudo-terminal
+    (a plain subprocess gets no TTY and would never enter interactive mode). Once
+    its UI is up we send "/exit"; a hard timeout then SIGKILLs as a backstop.
+    Best-effort: every failure is swallowed on purpose."""
     try:
-        subprocess.run(
-            [CLAUDE_BIN, "auth", "status"],
-            capture_output=True,
-            timeout=20,
-        )
-    except Exception:
-        pass
+        pid, fd = pty.fork()
+    except OSError:
+        return
+    if pid == 0:  # child: become Claude Code in the PTY
+        # SwiftBar runs plugins with a sparse env; interactive Claude wants a
+        # TERM and a HOME. Inherit the rest (PATH, USER) from the plugin process.
+        os.environ.setdefault("TERM", "xterm-256color")
+        os.environ.setdefault("HOME", os.path.expanduser("~"))
+        try:
+            os.execvp(CLAUDE_BIN, [CLAUDE_BIN])
+        except Exception:
+            os._exit(127)
+    # parent: wait for the UI to come up, then ask it to quit cleanly.
+    start = time.time()
+    buf = b""
+    sent_quit = False
+    try:
+        while time.time() - start < timeout:
+            wpid, _ = os.waitpid(pid, os.WNOHANG)
+            if wpid == pid:  # it exited on its own
+                return
+            r, _, _ = select.select([fd], [], [], 0.5)
+            if r:
+                try:
+                    chunk = os.read(fd, 4096)
+                except OSError:
+                    break
+                if not chunk:  # EOF: child gone
+                    break
+                buf += chunk
+            # Send "/exit" once the prompt UI has rendered (give it ~1.5s so the
+            # input box is ready and doesn't drop the keystrokes).
+            if not sent_quit and time.time() - start > 1.5 and b"\x1b[" in buf:
+                try:
+                    os.write(fd, b"/exit\r")
+                except OSError:
+                    break
+                sent_quit = True
+    finally:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        # Backstop: if it didn't exit from "/exit" in time, kill it. Then reap so
+        # we don't leave a zombie behind.
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+        try:
+            os.waitpid(pid, 0)
+        except OSError:
+            pass
 
 
 def read_cache():
