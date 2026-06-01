@@ -350,6 +350,9 @@ def reset_str(iso):
         if secs <= 0:
             return "resetting…"
         h, m = int(secs // 3600), int((secs % 3600) // 60)
+        if h >= 24:
+            d, h = divmod(h, 24)
+            return "resets in %dd %dh" % (d, h)
         return ("resets in %dh %02dm" % (h, m)) if h else ("resets in %dm" % m)
     except Exception:
         return ""
